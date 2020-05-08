@@ -1,0 +1,248 @@
+---
+# test code for toml_file plugins
+
+- name: record the output directory
+  set_fact: output_file={{ remote_tmp_dir }}/foo.toml
+
+- name: add "fav=lemonade" is in section "[drinks]" in specified file
+  toml_file:
+    path: "{{ output_file }}"
+    section: drinks
+    key: fav
+    value: lemonade
+  register: result1
+
+- name: verify toml_file 'changed' is true
+  assert:
+    that:
+      - result1.changed == True
+      - result1.msg == "Added section drinks. Added key fav=lemonade."
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: set expected content and get current toml file content
+  set_fact:
+    expected1: |
+      [drinks]
+      fav = "lemonade"
+    content1: "{{ output_content.content | b64decode }}"
+
+- name: Verify content of toml file is as expected
+  assert:
+    that:
+      - content1 == expected1
+
+- name: add "fav=lemonade" is in section "[drinks]" again
+  toml_file:
+    path: "{{ output_file }}"
+    section: drinks
+    key: fav
+    value: lemonade
+  register: result2
+
+- name: Ensure unchanged
+  assert:
+    that:
+      - result2.changed == False
+      - result2.msg == ''
+
+- name: Ensure "beverage=coke" is in section "[drinks]"
+  toml_file:
+    path: "{{ output_file }}"
+    section: drinks
+    key: beverage
+    value: coke
+  register: result3
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: set expected content and get current toml file content
+  set_fact:
+    expected3: |
+      [drinks]
+      fav = "lemonade"
+      beverage = "coke"
+    content3: "{{ output_content.content | b64decode }}"
+
+- name: assert 'changed' is true and content is OK
+  assert:
+    that:
+      - result3.changed == True
+      - result3.msg == 'Added key beverage=coke.'
+      - content3 == expected3
+
+- name: Remove key "beverage=coke"
+  toml_file:
+    path: "{{ output_file }}"
+    section: drinks
+    key: beverage
+    state: absent
+  register: result4
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: get toml file content
+  set_fact:
+    content4: "{{ output_content.content | b64decode }}"
+
+- name: assert changed and content is as expected
+  assert:
+    that:
+      - result4.changed == True
+      - result4.msg == 'Removed key beverage.'
+      - content4 == expected1
+
+- name: remove section 'drinks'
+  toml_file:
+    path: "{{ output_file }}"
+    section: drinks
+    state: absent
+  register: result5
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: get current toml file content
+  set_fact:
+    content5: "{{ output_content.content | b64decode }}"
+
+- name: assert changed and content is empty
+  assert:
+    that:
+      - result5.changed == True
+      - result5.msg == 'Removed section drinks.'
+      - content5 == ""
+
+- name: Clean test file
+  copy:
+    content: ""
+    dest: "{{ output_file }}"
+    force: yes
+
+- name: Ensure "beverage=coke" is created within no section
+  toml_file:
+    section:
+    path: "{{ output_file }}"
+    key: beverage
+    value: coke
+  register: result11
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: set expected content and get current toml file content
+  set_fact:
+    expected11: "beverage = \"coke\"\n"
+    content11: "{{ output_content.content | b64decode }}"
+
+- name: assert 'changed' is true and content is OK (no section)
+  assert:
+    that:
+      - result11 is changed
+      - result11.msg == 'Added key beverage=coke.'
+      - content11 == expected11
+
+- name: Ensure "beverage=coke" is modified as "beverage=water" within no section
+  toml_file:
+    path: "{{ output_file }}"
+    key: beverage
+    value: water
+    section:
+  register: result12
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: set expected content and get current toml file content
+  set_fact:
+    expected12: "beverage = \"water\"\n"
+
+    content12: "{{ output_content.content | b64decode }}"
+
+- name: debug result
+  debug:
+    var: result12
+
+- name: debug content
+  debug:
+    msg: "{{ output_content.content | b64decode }}"
+
+- name: assert 'changed' is true and content is OK (no section)
+  assert:
+    that:
+      - result12 is changed
+      - result12.msg == 'Added key beverage=water.'
+      - content12 == expected12
+
+- name: remove key 'beverage' within no section
+  toml_file:
+    section:
+    path: "{{ output_file }}"
+    key: beverage
+    state: absent
+  register: result13
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: get current toml file content
+  set_fact:
+    content13: "{{ output_content.content | b64decode }}"
+
+- name: assert changed (no section)
+  assert:
+    that:
+      - result13 is changed
+      - result13.msg == 'Removed key beverage.'
+      - content13 == ""
+
+- name: Check add key without section before existing section
+  block:
+    - name: Add key with section
+      toml_file:
+        path: "{{ output_file }}"
+        section: drinks
+        key: beverage
+        value: water
+    - name: Add key without section
+      toml_file:
+        path: "{{ output_file }}"
+        section:
+        key: like
+        value: tea
+
+- name: read content from output file
+  slurp:
+    src: "{{ output_file }}"
+  register: output_content
+
+- name: set expected content and get current toml file content
+  set_fact:
+    expected14: |
+      like = "tea"
+
+      [drinks]
+      beverage = "water"
+    content14: "{{ output_content.content | b64decode }}"
+
+- name: Verify content of toml file is as expected
+  assert:
+    that:
+      - content14 == expected14
