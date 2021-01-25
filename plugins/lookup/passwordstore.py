@@ -4,6 +4,9 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+import yaml
+import shlex
+
 
 DOCUMENTATION = '''
     lookup: passwordstore
@@ -146,7 +149,7 @@ class LookupModule(LookupBase):
         # I went with the "traditional" param followed with space separated KV pairs.
         # Waiting for final implementation of lookup parameter parsing.
         # See: https://github.com/ansible/ansible/issues/12255
-        params = term.split()
+        params = shlex.split(term)
         if len(params) > 0:
             # the first param is the pass-name
             self.passname = params[0]
@@ -187,10 +190,15 @@ class LookupModule(LookupBase):
             ).splitlines()
             self.password = self.passoutput[0]
             self.passdict = {}
-            for line in self.passoutput[1:]:
-                if ':' in line:
-                    name, value = line.split(':', 1)
-                    self.passdict[name.strip()] = value.strip()
+            try:
+                values = yaml.safe_load('\n'.join(self.passoutput[1:]))
+                for key, item in values.items():
+                    self.passdict[key] = item
+            except yaml.YAMLError:
+                for line in self.passoutput[1:]:
+                    if ':' in line:
+                        name, value = line.split(':', 1)
+                        self.passdict[name.strip()] = value.strip()
         except (subprocess.CalledProcessError) as e:
             if e.returncode == 1 and 'not in the password store' in e.output:
                 # if pass returns 1 and return string contains 'is not in the password store.'

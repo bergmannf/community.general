@@ -60,3 +60,16 @@
   assert:
     that:
       - readpass == newpass
+
+- name: Create a password that contains YAML
+  set_fact:
+    yamlpass: "{{ lookup('community.general.passwordstore', 'test-yaml-pass userpass=\"testpassword\nkey: |\n  multi\n  line\" create=yes') }}"
+
+- name: Fetch a password with equal sign
+  set_fact:
+    readyamlpass: "{{ lookup('community.general.passwordstore', 'test-yaml-pass subkey=key') }}"
+
+- name: Read a yaml subkey
+  assert:
+    that:
+      - readyamlpass == "multi\nline\n"
